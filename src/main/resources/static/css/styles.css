@@ -1,0 +1,173 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: system-ui, sans-serif;
+    margin: 0;
+    padding: 24px;
+    color: #1d2733;
+    background: #eef2f6;
+}
+
+h1 {
+    font-size: 1.4rem;
+    margin: 0 0 16px;
+}
+
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #f6f9fb;
+    border: 1px solid #cbd6df;
+    border-radius: 12px;
+    margin-bottom: 12px;
+}
+
+.toolbar .group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.toolbar .divider {
+    width: 1px;
+    height: 26px;
+    background: #cbd6df;
+}
+
+input[type="text"] {
+    padding: 6px 8px;
+    border: 1px solid #b7c3cd;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+button {
+    padding: 6px 12px;
+    border: 1px solid #3a6ea5;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #23496e;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+    background: #e8f0f7;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+button.active {
+    background: #3a6ea5;
+    color: #ffffff;
+}
+
+#current-board-id {
+    font-family: monospace;
+    background: #e8f0f7;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+#status-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.9rem;
+}
+
+#status-banner[data-status="idle"] {
+    background: #eef2f6;
+    color: #5a6b78;
+}
+
+#status-banner[data-status="loading"] {
+    background: #fff4d6;
+    color: #7a5b00;
+}
+
+#status-banner[data-status="success"] {
+    background: #e3f6e8;
+    color: #1f6f3c;
+}
+
+#status-banner[data-status="error"] {
+    background: #fbe4e4;
+    color: #a3242f;
+}
+
+#interaction-hint {
+    min-height: 1.2em;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    color: #5a6b78;
+}
+
+#board-svg {
+    width: 100%;
+    height: 560px;
+    background: #ffffff;
+    border: 1px solid #cbd6df;
+    border-radius: 12px;
+    cursor: crosshair;
+}
+
+.board-element rect {
+    fill: #dceafc;
+    stroke: #3a6ea5;
+    stroke-width: 1.5;
+}
+
+.board-text .text-background {
+    fill: transparent;
+    stroke: transparent;
+}
+
+.board-element text {
+    fill: #1d2733;
+    font-size: 13px;
+    pointer-events: none;
+}
+
+.board-element.selected rect {
+    stroke: #d64545;
+    stroke-width: 2.5;
+}
+
+.board-element.connect-source rect {
+    stroke: #2f9e44;
+    stroke-width: 2.5;
+}
+
+.board-connector line:not(.connector-hit-area) {
+    stroke: #5a6b78;
+    stroke-width: 2;
+}
+
+.board-connector.selected line:not(.connector-hit-area) {
+    stroke: #d64545;
+}
+
+.connector-hit-area {
+    stroke: transparent;
+    stroke-width: 12;
+}
+
+.board-element {
+    cursor: grab;
+}
+
+.board-connector {
+    cursor: pointer;
+}

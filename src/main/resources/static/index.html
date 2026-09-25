@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ARSW Collaborative Board</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<h1>ARSW Collaborative Architecture Board — Interactive Client (Lab 05)</h1>
+
+<div class="toolbar">
+    <div class="group">
+        <input type="text" id="board-name-input" placeholder="New board name">
+        <button id="new-board-btn">New Board</button>
+    </div>
+    <div class="divider"></div>
+    <div class="group">
+        <input type="text" id="load-board-input" placeholder="Board id to load">
+        <button id="load-board-btn">Load</button>
+    </div>
+    <div class="divider"></div>
+    <div class="group">
+        <span>Current board:</span>
+        <span id="current-board-id">(no board loaded)</span>
+    </div>
+</div>
+
+<div class="toolbar">
+    <div class="group">
+        <button id="add-rectangle-btn">Add Rectangle</button>
+        <button id="add-text-btn">Add Text</button>
+        <button id="connect-btn">Connect</button>
+        <button id="delete-btn">Delete Selected</button>
+    </div>
+    <div class="divider"></div>
+    <div class="group">
+        <button id="save-btn">Save</button>
+    </div>
+</div>
+
+<div id="status-banner" data-status="idle">
+    <span id="status-message">Ready.</span>
+    <button id="retry-btn" hidden>Retry</button>
+</div>
+
+<div id="interaction-hint"></div>
+
+<svg id="board-svg" viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <marker id="connector-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#5a6b78"></path>
+        </marker>
+    </defs>
+</svg>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
