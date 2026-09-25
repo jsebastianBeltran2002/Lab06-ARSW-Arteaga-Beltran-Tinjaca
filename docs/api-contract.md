@@ -99,3 +99,14 @@ The interactive web client (see `docs/ADR-002-client-boundaries.md`) consumes ex
 Per the lab's design constraints, no `/moveElement`, `/drawRectangle` or similar action-specific endpoints were
 added: move/add/delete/connect are local `BoardState` mutations on the client, and `PUT /api/boards/{boardId}`
 (full replace) is the single persistence operation, triggered only by an explicit **Save** action.
+
+## Lab 06 — REST keeps bootstrap and snapshots
+
+No endpoints were added or changed. Live collaboration uses STOMP/WebSocket, documented separately in
+[`event-contract.md`](event-contract.md); REST remains the way to create a Board, load its initial state and
+recover a snapshot after a reload (see [`ADR-003-rest-vs-realtime.md`](ADR-003-rest-vs-realtime.md)). Accepted live
+events are persisted through the same `BoardRepository`, so `GET /api/boards/{boardId}` always returns the state
+live clients see.
+
+One aggregate invariant was added: element `id`s must be unique within a Board. A `PUT` with two elements sharing
+an `id` now returns `400 INVALID_INPUT`.

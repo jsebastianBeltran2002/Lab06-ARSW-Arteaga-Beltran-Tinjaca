@@ -1,60 +1,82 @@
-# ArchiMate Application View — Lab 05
+# ArchiMate Application View — Lab 06
 
-Modeled using ArchiMate 3.2 Application Layer concepts (Application Component, Application Interface, Data Object). Rendered as a Mermaid diagram — no Archi/Draw.io installation was available in this environment — with the exact notation mapping documented below so it can be redrawn in Archi/Draw.io if required.
+Modeled using ArchiMate 3.2 Application Layer concepts (Application Component, Application Interface, Application Service, Data Object). Rendered as Mermaid — with the notation mapping below so it can be redrawn in Archi/Draw.io if required.
 
-Evolved from the Lab 04 view: the client is no longer an opaque external box. `Web Client` is now decomposed into the three components required by the lab (`BoardApiClient`, `BoardState`, `SVG Board View`) plus their orchestrator (`BoardApp`), so the diagram shows the real dependency shape instead of a placeholder.
+Evolved from the Lab 05 view, not redrawn: the same Web Client, REST interface, application service and repository remain; Lab 06 adds the **WebSocket/STOMP interface**, the **BoardEventApplicationService**, the **BoardRealtimeClient** in the browser, and the in-memory **message broker**. The two interaction styles are labeled explicitly: **HTTP/JSON** and **STOMP/WebSocket**.
 
 ```mermaid
 flowchart TB
-    subgraph webclient["Web Client (browser, ES Modules)"]
-        app["«Application Component»\nBoardApp\n(orchestration)"]
-        apiClient["«Application Component»\nBoardApiClient\n(HTTP/JSON access)"]
-        boardState["«Application Component»\nBoardState\n(local state + pure ops)"]
-        svgView["«Application Component»\nSVG Board View\n(render + DOM events)"]
+    subgraph webclient["Web Client (browser, ES Modules) — one per participant"]
+        app["«Application Component»\nBoardApp (app.js)\norchestration"]
+        apiClient["«Application Component»\nBoardApiClient\nHTTP access"]
+        rtClient["«Application Component»\nBoardRealtimeClient\nSTOMP access"]
+        events["«Application Component»\nBoardEvents\nevent factory"]
+        boardState["«Application Component»\nBoardState\nstate + applyEvent"]
+        svgView["«Application Component»\nSVG Board View"]
     end
 
-    subgraph app_layer["ARSW Collaborative Board — Application Layer"]
-        iface["«Application Interface»\nREST Interface\n/api/boards"]
-        controller["«Application Component»\nBoardRestController"]
-        service["«Application Component»\nBoardApplicationService\n(create / get / replace / delete use cases)"]
+    subgraph server["ARSW Collaborative Board — Application Layer (Spring Boot)"]
+        restIf["«Application Interface»\nREST Interface\n/api/boards"]
+        wsIf["«Application Interface»\nWebSocket/STOMP Interface\n/ws · /app/boards/{id}/events"]
+        restCtrl["«Application Component»\nBoardRestController"]
+        wsCtrl["«Application Component»\nBoardWebSocketController"]
+        boardSvc["«Application Service»\nBoardApplicationService\ncreate / get / replace / delete"]
+        eventSvc["«Application Service»\nBoardEventApplicationService\nvalidate + apply event"]
+        broker["«Application Component»\nSimple in-memory broker\n/topic/boards/{id} · /user/queue/errors"]
         port["«Application Interface»\nBoardRepository (port)"]
         adapter["«Application Component»\nInMemoryBoardRepository (adapter)"]
-        data[("«Data Object»\nBoard data\n(in-memory map)")]
-        errors["«Application Component»\nGlobalExceptionHandler\n(uniform ApiError)"]
+        data[("«Data Object»\nBoard data")]
     end
 
     app --> apiClient
+    app --> rtClient
+    app --> events
     app --> boardState
-    app --> svgView
-    svgView -. "user interaction events" .-> app
     app -. "render(state)" .-> svgView
-    apiClient -- "HTTP/JSON" --> iface
-    iface --> controller
-    controller -- "invokes" --> service
-    service -- "depends on (DIP)" --> port
+    svgView -. "interaction callbacks" .-> app
+
+    apiClient == "HTTP/JSON (load, snapshot, save)" ==> restIf
+    rtClient == "STOMP/WebSocket SEND (publishes events)" ==> wsIf
+    broker == "STOMP/WebSocket MESSAGE (subscribers of the board)" ==> rtClient
+
+    restIf --> restCtrl
+    wsIf --> wsCtrl
+    restCtrl -- "invokes" --> boardSvc
+    wsCtrl -- "invokes" --> eventSvc
+    wsCtrl -- "publishes accepted event" --> broker
+    boardSvc --> port
+    eventSvc --> port
     port -. "implemented by" .-> adapter
     adapter -- "reads/writes" --> data
-    controller -. "delegates error translation" .-> errors
-    service -. "raises domain/app exceptions" .-> errors
 ```
+
+## Who publishes, who subscribes
+
+| Destination | Publisher | Subscribers |
+|---|---|---|
+| `/app/boards/{boardId}/events` | `BoardRealtimeClient` of the participant who made the change | `BoardWebSocketController` (application handler, not a broker topic) |
+| `/topic/boards/{boardId}` | `BoardWebSocketController`, only after `BoardEventApplicationService` accepted the event | `BoardRealtimeClient` of **every** participant connected to that `boardId` (including the sender) |
+| `/user/queue/errors` | `BoardWebSocketController` exception handlers | Only the session that sent the rejected event |
+
+A participant connected to another `boardId` subscribes to a different topic and never receives these messages (session isolation, verified by `BoardRealtimeIntegrationTest`).
 
 ## Notation mapping
 
-| Diagram element | ArchiMate concept |
-|---|---|
-| `BoardApp` | Application Component (orchestrates the other three client components — no HTTP, no SVG code of its own) |
-| `BoardApiClient` | Application Component (the only component allowed to call `fetch`; translates non-2xx responses into a client-side error contract) |
-| `BoardState` | Application Component (holds current board, selection, interaction mode, remote status; exposes pure list operations) |
-| `SVG Board View` | Application Component (renders `BoardState` as SVG/DOM, turns mouse events into semantic callbacks — no persistence or HTTP knowledge) |
-| `REST Interface` | Application Interface |
-| `BoardRestController` | Application Component (exposes the interface, no business logic — RA-01) |
-| `BoardApplicationService` | Application Component (realizes the Application Service / use cases) |
-| `BoardRepository (port)` | Application Interface (output port, owned by the application boundary — RA-02) |
-| `InMemoryBoardRepository (adapter)` | Application Component (realizes the port — RA-03) |
-| `Board data (in-memory map)` | Data Object |
-| `GlobalExceptionHandler` | Application Component (cross-cutting, centralizes the error contract — RA-05) |
+| Diagram element | ArchiMate concept | Code |
+|---|---|---|
+| `BoardApp` | Application Component | `static/js/app.js` |
+| `BoardApiClient` | Application Component | `static/js/api/board-api-client.js` (only `fetch` caller) |
+| `BoardRealtimeClient` | Application Component | `static/js/realtime/board-realtime-client.js` (only STOMP user) |
+| `BoardEvents` | Application Component | `static/js/events/board-event.js` |
+| `BoardState` | Application Component | `static/js/state/board-state.js` |
+| `SVG Board View` | Application Component | `static/js/ui/board-view.js` |
+| REST Interface | Application Interface | `/api/boards` |
+| WebSocket/STOMP Interface | Application Interface | `/ws`, `/app/boards/{id}/events` (`WebSocketConfig`) |
+| `BoardRestController`, `BoardWebSocketController` | Application Component | `infrastructure/web/rest`, `infrastructure/web/ws` |
+| `BoardApplicationService`, `BoardEventApplicationService` | Application Service (realized by a component of the same name) | `application/service` |
+| Simple in-memory broker | Application Component (Spring `SimpleBrokerMessageHandler`) | `WebSocketConfig.enableSimpleBroker` |
+| `BoardRepository` | Application Interface (output port) | `application/port/out` |
+| `InMemoryBoardRepository` | Application Component (adapter) | `infrastructure/persistence` |
+| Board data | Data Object | `Map<String, Board>` |
 
-This view matches the package/module structure actually implemented:
-
-- Backend: `infrastructure.web.rest` → `application.service` → `application.port.out` → `infrastructure.persistence`.
-- Client: `js/app.js` → (`js/api/board-api-client.js`, `js/state/board-state.js`, `js/ui/board-view.js`). `board-api-client.js` and `board-view.js` never import each other; both are only known to `app.js` (see `docs/ADR-002-client-boundaries.md`).
+`GlobalExceptionHandler` (REST error contract) is unchanged from Lab 05 and omitted here for readability; its STOMP counterpart is the `@MessageExceptionHandler` methods of `BoardWebSocketController`.

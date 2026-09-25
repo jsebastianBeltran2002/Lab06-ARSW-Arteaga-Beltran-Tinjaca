@@ -1,59 +1,110 @@
-# Class / Module Diagram — Lab 05
+# Class / Module Diagram — Lab 06
 
-Only the classes/modules that explain the main structure and their real dependency direction (RA-06). Backend classes are unchanged in shape from Lab 04 except for the `CONNECTOR`-related additions on `BoardElement`/`Board`; the client modules are new this lab.
+Only the classes and modules that explain the real-time path and its relation to the existing model. Unchanged Lab 05 classes (`GlobalExceptionHandler`, `ApiError`, request DTOs) are omitted; see git history for the Lab 05 version of this file.
+
+## Backend
 
 ```mermaid
 classDiagram
+    direction LR
+
+    class WebSocketConfig {
+        <<configuration>>
+        +configureMessageBroker(registry) : /topic /queue, app /app, user /user
+        +registerStompEndpoints(registry) : /ws
+    }
+
+    class BoardWebSocketController {
+        -BoardEventApplicationService service
+        -SimpMessagingTemplate messagingTemplate
+        +handle(boardId, BoardEvent) : @MessageMapping /boards/{boardId}/events
+        +boardNotFound(BoardNotFoundException) BoardEventError
+        +invalidEvent(IllegalArgumentException) BoardEventError
+        +unexpected(Exception) BoardEventError
+    }
+
+    class BoardEventError {
+        <<record>>
+        +Instant timestamp
+        +String code
+        +String message
+    }
+
     class BoardRestController {
         -BoardApplicationService service
-        +create(CreateBoardRequest) ResponseEntity~Board~
-        +get(String boardId) Board
-        +replace(String boardId, ReplaceBoardRequest) Board
-        +delete(String boardId) ResponseEntity~Void~
+        +create / get / replace / delete
+    }
+
+    class BoardEventApplicationService {
+        -BoardRepository repository
+        +apply(BoardEvent) BoardEvent
     }
 
     class BoardApplicationService {
         -BoardRepository repository
-        +createBoard(String name) Board
-        +getBoard(String boardId) Board
-        +replaceBoard(String boardId, String name, List~BoardElement~) Board
-        +deleteBoard(String boardId) void
+        +createBoard / getBoard / replaceBoard / deleteBoard
     }
+
+    class BoardEvent {
+        <<record>>
+        +String eventId
+        +String boardId
+        +BoardEventType type
+        +String actorId
+        +Instant occurredAt
+        +BoardEventPayload payload
+    }
+
+    class BoardEventType {
+        <<enumeration>>
+        ELEMENT_CREATED
+        ELEMENT_MOVED
+        ELEMENT_UPDATED
+        ELEMENT_DELETED
+        CONNECTOR_CREATED
+    }
+
+    class BoardEventPayload {
+        <<record>>
+        +BoardElement element
+        +String elementId
+        +Double x
+        +Double y
+    }
+
+    class InvalidBoardEventException
+    class BoardNotFoundException
 
     class BoardRepository {
         <<interface>>
         +save(Board) Board
-        +findById(String boardId) Optional~Board~
-        +existsById(String boardId) boolean
+        +findById(String) Optional~Board~
+        +existsById(String) boolean
+        +deleteById(String) void
     }
 
-    class InMemoryBoardRepository {
-        -Map~String, Board~ boards
-        +save(Board) Board
-        +findById(String boardId) Optional~Board~
-        +existsById(String boardId) boolean
-    }
+    class InMemoryBoardRepository
 
     class Board {
         <<record>>
         +String id
         +String name
         +List~BoardElement~ elements
-        Board(id, name, elements) : validates every CONNECTOR's sourceId/targetId exist among elements
+        +findElement(id) Optional~BoardElement~
+        +withElementAdded(BoardElement) Board
+        +withElementMoved(id, x, y) Board
+        +withElementReplaced(BoardElement) Board
+        +withElementRemoved(id) Board
     }
 
     class BoardElement {
         <<record>>
         +String id
         +ElementType type
-        +double x
-        +double y
-        +double width
-        +double height
+        +double x, y, width, height
         +String text
-        +String sourceId
-        +String targetId
-        BoardElement(...) : requires distinct sourceId/targetId when type is CONNECTOR
+        +String sourceId, targetId
+        +movedTo(x, y) BoardElement
     }
 
     class ElementType {
@@ -63,91 +114,69 @@ classDiagram
         CONNECTOR
     }
 
-    class BoardNotFoundException {
-        -String boardId
-    }
-
-    class GlobalExceptionHandler {
-        +boardNotFound(BoardNotFoundException) ResponseEntity~ApiError~
-        +invalidRequest(MethodArgumentNotValidException) ResponseEntity~ApiError~
-        +invalidDomainInput(IllegalArgumentException) ResponseEntity~ApiError~
-        +malformedRequestBody(HttpMessageNotReadableException) ResponseEntity~ApiError~
-        +starterTodo(UnsupportedOperationException) ResponseEntity~ApiError~
-        +unexpected(Exception) ResponseEntity~ApiError~
-    }
-
-    class ApiError {
-        <<record>>
-        +Instant timestamp
-        +int status
-        +String code
-        +String message
-        +String path
-    }
-
+    WebSocketConfig ..> BoardWebSocketController : routes /app to
+    BoardWebSocketController --> BoardEventApplicationService : apply(event)
+    BoardWebSocketController ..> BoardEventError : sends to /user/queue/errors
+    BoardWebSocketController ..> BoardEvent : receives / broadcasts
     BoardRestController --> BoardApplicationService : uses
+    BoardEventApplicationService --> BoardRepository : depends on (DIP)
     BoardApplicationService --> BoardRepository : depends on (DIP)
     InMemoryBoardRepository ..|> BoardRepository : implements
-    BoardApplicationService --> Board : creates/returns
-    BoardApplicationService --> BoardNotFoundException : throws
+    BoardEventApplicationService ..> Board : applies transition
+    BoardEventApplicationService ..> InvalidBoardEventException : throws
+    BoardEventApplicationService ..> BoardNotFoundException : throws
+    BoardEvent --> BoardEventType
+    BoardEvent *-- BoardEventPayload
+    BoardEventPayload --> BoardElement : references
     Board *-- BoardElement : contains
-    BoardElement --> ElementType : has
-    GlobalExceptionHandler --> BoardNotFoundException : handles
-    GlobalExceptionHandler --> ApiError : builds
+    BoardElement --> ElementType
+```
+
+## Client modules
+
+```mermaid
+classDiagram
+    direction LR
 
     class BoardApp {
-        -BoardApiClient apiClient
-        -BoardState state
-        -BoardView view
-        +createBoard(name) void
-        +loadBoard(boardId) void
-        +saveBoard() void
-        +retryLastOperation() void
-        +handleElementInteraction/DragEnd/CanvasInteraction()
+        <<app.js>>
+        -actorId
+        +commit(buildEvent) : publish if live, else applyEvent locally
+        +connectLive() / loadBoard() / saveBoard()
     }
-
-    class BoardApiClient {
-        +createBoard(name) Promise~Board~
-        +getBoard(boardId) Promise~Board~
-        +replaceBoard(boardId, name, elements) Promise~Board~
-        +deleteBoard(boardId) Promise~void~
+    class BoardRealtimeClient {
+        +connect(boardId) Promise
+        +publish(event) Promise
+        +disconnect() Promise
+        +isConnectedTo(boardId) boolean
     }
-
-    class ApiClientError {
-        +status
-        +code
-        +message
+    class BoardEvents {
+        +elementCreated / connectorCreated / elementMoved / elementUpdated / elementDeleted
     }
-
     class BoardState {
-        -state : {board, selectedElementId, connectSourceId, mode, remoteStatus, errorMessage, lastOperation}
-        +subscribe(listener) unsubscribe
-        +setBoard(board) void
-        +addRectangleAt/addTextAt(x, y) void
-        +moveElement(id, x, y) void
-        +deleteSelectedElement() void
-        +pickConnectorEndpoint(id) result
-        +setRemoteStatus(status, message) void
+        +applyEvent(event) boolean
+        +setLiveStatus(status, message)
+        +setBoard(board)
+        +pickConnectorEndpoint(id)
     }
-
+    class BoardApiClient {
+        +createBoard / getBoard / replaceBoard / deleteBoard
+    }
     class BoardView {
-        -svg : SVGSVGElement
-        -handlers
-        +render(state) void
-        onMouseDown/Move/Up(evt) : classifies click vs drag
+        +render(state)
     }
 
-    BoardApp --> BoardApiClient : calls (only module using fetch)
-    BoardApp --> BoardState : reads/mutates
-    BoardApp --> BoardView : render(state) + wires handlers
-    BoardView --> BoardApp : reports interaction via callbacks (no direct import)
-    BoardApiClient --> ApiClientError : throws on non-2xx
-    BoardApp ..> BoardRestController : HTTP/JSON via BoardApiClient
+    BoardApp --> BoardRealtimeClient : connect / publish
+    BoardApp --> BoardEvents : builds events
+    BoardApp --> BoardState : applyEvent / setLiveStatus
+    BoardApp --> BoardApiClient : REST bootstrap / snapshot
+    BoardApp --> BoardView : render(state)
+    BoardRealtimeClient ..> BoardApp : onEvent / onRejected / onConnected ... callbacks
 ```
 
 ## Key dependency directions (verifiable in code)
 
-- `BoardRestController` → `BoardApplicationService` → `BoardRepository` (interface). No arrow points from `BoardApplicationService` to `InMemoryBoardRepository` (RA-02).
-- `InMemoryBoardRepository` is the only class that implements `BoardRepository` and the only class touching the `Map` (RA-03/RA-07).
-- `domain.model` classes (`Board`, `BoardElement`, `ElementType`) have no dependency on Spring, HTTP, or persistence types. `Board`'s compact constructor is also the single place that enforces the new Lab 05 invariant — every `CONNECTOR` must reference elements that exist in the same board.
-- On the client: `board-api-client.js` is the only module that calls `fetch` (verifiable with `grep -rn "fetch(" src/main/resources/static/js`). `board-state.js` has zero DOM references. `board-view.js` never imports `board-api-client.js` or `board-state.js` — it only receives a plain state object to render and a set of callback handlers; `app.js` is the only module that imports all three, matching the "no cycles" requirement from the lab statement.
+- `BoardWebSocketController` → `BoardEventApplicationService` → `BoardRepository` (port). The STOMP adapter never touches the repository or the domain transitions directly; broadcast happens only after `apply` returns.
+- `application.event` (`BoardEvent`, `BoardEventType`, `BoardEventPayload`) depends on `domain.model` (`BoardElement`), never the other way around: the domain has no knowledge of events, STOMP or JSON.
+- Spring messaging types (`SimpMessagingTemplate`, `@MessageMapping`, `@SendToUser`) appear only in `infrastructure.web.ws`.
+- Client: `grep -rn "Stomp\|/topic\|/app/" src/main/resources/static/js` only matches `js/realtime/board-realtime-client.js`; `fetch(` only matches `js/api/board-api-client.js`. `BoardRealtimeClient` imports no other module; `BoardState` has no DOM or STOMP references. `app.js` is the only module that wires them together.

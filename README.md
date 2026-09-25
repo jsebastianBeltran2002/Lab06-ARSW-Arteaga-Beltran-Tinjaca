@@ -1,8 +1,31 @@
-# ARSW Collaborative Architecture Board — Lab 05
+# ARSW Collaborative Architecture Board — Lab 06
 
-Backend foundation (Lab #4) plus an interactive SVG web client (Lab #5) for the ARSW Collaborative Architecture Board.
+Backend foundation (Lab #4), an interactive SVG web client (Lab #5) and real-time collaboration over WebSocket/STOMP (Lab #6) for the ARSW Collaborative Architecture Board.
 
 The goal was **not** to practice REST syntax, nor to build a polished frontend. The goal was a backend with explicit architectural boundaries, dependency inversion, constructor injection, consistent error handling, tests, and architecture evidence — and, on top of it, a thin, decoupled web client ready to receive WebSockets in Lab #6. See [`docs/ADR-002-client-boundaries.md`](docs/ADR-002-client-boundaries.md) for how the client is split into modules.
+
+## Real-time collaboration (Lab 06)
+
+Two or more browsers that load the same `boardId` share a live session. REST still creates/loads the Board and serves snapshots; STOMP/WebSocket carries the interaction events. See [`docs/event-contract.md`](docs/event-contract.md) and [`docs/ADR-003-rest-vs-realtime.md`](docs/ADR-003-rest-vs-realtime.md).
+
+```text
+Browser ── SEND /app/boards/{id}/events ──► BoardWebSocketController ──► BoardEventApplicationService ──► BoardRepository
+   ▲                                                  │ (only if accepted)
+   └──────────── /topic/boards/{id} ◄─────────────────┘
+```
+
+**Demo (three windows):**
+
+1. Window A: **New Board** (the URL becomes `?board=<id>`), then **Connect live**.
+2. Window B: open the same URL (or paste the id and **Load**), then **Connect live**.
+3. Window C: create a *different* board and **Connect live**.
+4. In A add a rectangle → it appears in B. In B drag it → A updates when the drag ends.
+5. Create two elements and **Connect** them; **Edit Text**; **Delete Selected** on an endpoint → the connector disappears in both.
+6. C never changes. Reload A → the board is recovered from the REST snapshot.
+
+While live, a change is applied when the server broadcasts it back as accepted; a rejected change is reported only to its sender. Offline (not connected), the client behaves as in Lab 05: changes stay local until **Save**.
+
+Module additions: `static/js/realtime/board-realtime-client.js` (the only module that knows STOMP) and `static/js/events/board-event.js` (event factory). Backend additions: `application/event`, `application/service/BoardEventApplicationService`, `infrastructure/web/ws`.
 
 ## Interactive client (Lab 05)
 
@@ -15,7 +38,9 @@ Client modules (ES Modules, no framework, no bundler):
 | `static/js/api/board-api-client.js` | The only module allowed to call `fetch`; translates HTTP errors into a client error contract. |
 | `static/js/state/board-state.js` | Local state (current board, selection, interaction mode, remote status) and pure list operations. |
 | `static/js/ui/board-view.js` | Renders the state as SVG and turns mouse events into semantic callbacks. |
-| `static/js/app.js` | Orchestrates the three modules above. |
+| `static/js/realtime/board-realtime-client.js` | (Lab 06) The only module that knows STOMP: connection, subscriptions, publication. |
+| `static/js/events/board-event.js` | (Lab 06) Builds `BoardEvent` envelopes. |
+| `static/js/app.js` | Orchestrates the modules above. |
 
 ## Technology baseline
 
@@ -27,16 +52,16 @@ Client modules (ES Modules, no framework, no bundler):
 ## Target architecture
 
 ```text
-REST Controller
-      |
-      v
-Application Service
-      |
-      v
-BoardRepository (port)
-      |
-      v
-InMemoryBoardRepository (adapter)
+REST Controller            STOMP Controller (Lab 06)
+      |                           |
+      v                           v
+BoardApplicationService    BoardEventApplicationService
+      \                          /
+       v                        v
+        BoardRepository (port)
+                 |
+                 v
+     InMemoryBoardRepository (adapter)
 ```
 
 ## What this backend provides
@@ -100,8 +125,8 @@ Expected output: five labeled steps, ending in `DEMO COMPLETE`, with a generated
 mvn test
 ```
 
-All tests (domain model, in-memory adapter, application service, and REST controller) pass — 39 tests, including the board-not-found, invalid-element, delete, and Lab 05 `CONNECTOR`-invariant cases.
+All tests pass — 65 tests: domain model, in-memory adapter, application services, REST controller (MockMvc), the Lab 06 event contract and event service, the STOMP controller, and an integration test with real STOMP clients that checks propagation within a board, isolation between boards and private rejections.
 
 ## Continuity rule
 
-This completed Lab 05 repository becomes the conceptual baseline for **Lab 06 — Real-Time Collaboration** (WebSocket/STOMP). Avoid unnecessary changes to contracts and package boundaries.
+This repository accumulates Labs #4–#6 and is the baseline for **Lab 07 — Concurrent Collaboration**. The live path (`BoardEventApplicationService.apply`: find → transition → save over a `HashMap`) is intentionally not thread-safe and has no event ordering; Lab 07 will stress it with simultaneous clients. See `NEXT_LABS.md`.

@@ -36,3 +36,6 @@ This gives a one-directional dependency graph — `app.js → {board-api-client.
 - `src/main/resources/static/js/ui/board-view.js` — `BoardView` class; no `import` of `board-state.js` or `board-api-client.js`; communicates only through constructor-injected `handlers`.
 - `src/main/resources/static/js/app.js` — the only file importing all three modules; owns the `loading`/`success`/`error` cycle and `retryLastOperation()`.
 - Verified with `node --check` on all four modules and by exercising the pure `board-state.js` functions directly in Node (add/move/delete/cascade-delete-connector/connect-flow), plus an end-to-end `curl` smoke test (create → `PUT` with a `RECTANGLE`, `TEXT` and `CONNECTOR` → `GET` reload) confirming the payload `BoardApiClient.replaceBoard` sends is accepted and round-trips unchanged.
+
+## Lab 06 follow-up
+The split held: real-time collaboration was added as two new leaf modules — `js/realtime/board-realtime-client.js` (the only STOMP user, the WebSocket counterpart of `board-api-client.js`) and `js/events/board-event.js` (event factory) — plus `BoardState.applyEvent`. `BoardView` did not change. `app.js` remains the only module that wires everything; the STOMP callback only transitions `BoardState` and rendering follows from its `notify()`. See [ADR-003](ADR-003-rest-vs-realtime.md).

@@ -1,11 +1,14 @@
-# Architecture Evidence — Lab 05
+# Architecture Evidence — Lab 06
 
-1. **[ArchiMate Application View](application-view.md)** — Web Client (`BoardApp`, `BoardApiClient`, `BoardState`, SVG Board View), REST interface, application service, repository port/adapter, in-memory data object, and error handler, with the ArchiMate concept each element maps to.
+1. **[ArchiMate Application View](application-view.md)** — Web Client (with `BoardRealtimeClient`), REST interface (**HTTP/JSON**), WebSocket/STOMP interface (**STOMP/WebSocket**), `BoardApplicationService` and `BoardEventApplicationService`, the in-memory broker and the repository port/adapter, plus a table of who publishes and who subscribes to each destination.
 
-2. **[Class / module diagram](class-diagram.md)** — `BoardRestController`, `BoardApplicationService`, `BoardRepository`, `InMemoryBoardRepository`, the relevant domain model (including the Lab 05 `CONNECTOR` invariants), the error-handling classes, and the four client-side modules and their one-directional dependency graph.
+2. **[Class / module diagram](class-diagram.md)** — `BoardEvent`, `BoardEventType`, `BoardEventPayload`, `BoardEventApplicationService`, `BoardWebSocketController`, `WebSocketConfig` and their relation to the existing `Board`/`BoardElement` model and `BoardRepository` port, plus the client modules.
 
-See also **[ADR-002 — Client boundaries](../ADR-002-client-boundaries.md)** for the reasoning behind the client module split.
+See also:
+- **[Event contract](../event-contract.md)** — destinations, envelope, per-type payload and rejections.
+- **[ADR-003 — REST and WebSocket/STOMP coexist](../ADR-003-rest-vs-realtime.md)**.
+- **[ADR-002 — Client boundaries](../ADR-002-client-boundaries.md)** and **[ADR-001 — Repository boundary](../ADR-001-repository-boundary.md)** from previous labs.
 
 ## Quality rule
 
-The diagrams describe the code actually delivered in this repository (see `src/main/java/edu/eci/arsw/collabboard`) — no decorative boxes, no framework classes beyond what carries architectural meaning.
+The diagrams describe the code actually delivered in this repository (see `src/main/java/edu/eci/arsw/collabboard` and `src/main/resources/static/js`) — no decorative boxes, no framework classes beyond what carries architectural meaning.
