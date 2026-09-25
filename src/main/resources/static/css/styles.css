@@ -171,3 +171,35 @@ button.active {
 .board-connector {
     cursor: pointer;
 }
+
+#live-status {
+    font-family: monospace;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #eef2f6;
+    color: #5a6b78;
+}
+
+#live-status[data-status="connecting"] {
+    background: #fff4d6;
+    color: #7a5b00;
+}
+
+#live-status[data-status="connected"] {
+    background: #e3f6e8;
+    color: #1f6f3c;
+}
+
+#live-status[data-status="error"] {
+    background: #fbe4e4;
+    color: #a3242f;
+}
+
+#actor-id {
+    font-size: 0.85rem;
+}
+
+#live-message {
+    font-size: 0.85rem;
+    color: #5a6b78;
+}

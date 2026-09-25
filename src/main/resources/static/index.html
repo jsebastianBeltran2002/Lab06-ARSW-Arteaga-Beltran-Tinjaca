@@ -5,9 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ARSW Collaborative Board</title>
     <link rel="stylesheet" href="css/styles.css">
+    <!-- STOMP 2.3.4 (webjar). Only js/realtime/board-realtime-client.js uses the global it defines. -->
+    <script src="webjars/stomp-websocket/2.3.4/stomp.min.js"></script>
 </head>
 <body>
-<h1>ARSW Collaborative Architecture Board — Interactive Client (Lab 05)</h1>
+<h1>ARSW Collaborative Architecture Board — Real-Time Collaboration (Lab 06)</h1>
 
 <div class="toolbar">
     <div class="group">
@@ -31,12 +33,31 @@
         <button id="add-rectangle-btn">Add Rectangle</button>
         <button id="add-text-btn">Add Text</button>
         <button id="connect-btn">Connect</button>
+        <button id="edit-text-btn">Edit Text</button>
         <button id="delete-btn">Delete Selected</button>
     </div>
     <div class="divider"></div>
     <div class="group">
         <button id="save-btn">Save</button>
     </div>
+</div>
+
+<div class="toolbar live-bar">
+    <div class="group">
+        <button id="connect-live-btn">Connect live</button>
+        <button id="disconnect-live-btn">Disconnect</button>
+    </div>
+    <div class="divider"></div>
+    <div class="group">
+        <span>Live:</span>
+        <span id="live-status" data-status="disconnected">disconnected</span>
+    </div>
+    <div class="divider"></div>
+    <div class="group">
+        <span>Actor:</span>
+        <code id="actor-id"></code>
+    </div>
+    <span id="live-message"></span>
 </div>
 
 <div id="status-banner" data-status="idle">

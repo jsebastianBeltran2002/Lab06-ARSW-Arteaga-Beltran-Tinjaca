@@ -4,6 +4,12 @@
  * own copy of the board. All list operations below are pure (they return
  * new arrays instead of mutating their inputs) so they stay easy to test
  * in isolation from the DOM.
+ *
+ * Lab 06: every change to the board's elements is expressed as a
+ * collaboration event and goes through applyEvent(), whether it was
+ * accepted by the server (live) or applied locally (offline, then Save).
+ * The STOMP callback therefore only transitions this state; rendering
+ * happens afterwards through the normal subscribe/notify cycle.
  */
 
 export const InteractionMode = Object.freeze({
@@ -11,6 +17,13 @@ export const InteractionMode = Object.freeze({
     ADD_RECTANGLE: "add-rectangle",
     ADD_TEXT: "add-text",
     CONNECT: "connect",
+});
+
+export const LiveStatus = Object.freeze({
+    DISCONNECTED: "disconnected",
+    CONNECTING: "connecting",
+    CONNECTED: "connected",
+    ERROR: "error",
 });
 
 export const RemoteStatus = Object.freeze({
@@ -37,6 +50,10 @@ export function updateElementPosition(elements, elementId, x, y) {
     );
 }
 
+export function replaceElement(elements, updated) {
+    return elements.map((element) => (element.id === updated.id ? updated : element));
+}
+
 export function removeElement(elements, elementId) {
     return elements
         .filter((element) => element.id !== elementId)
@@ -44,6 +61,30 @@ export function removeElement(elements, elementId) {
             element.type !== "CONNECTOR" ||
             (element.sourceId !== elementId && element.targetId !== elementId)
         );
+}
+
+/**
+ * Pure transition: the element list after applying one collaboration event.
+ * Idempotent for creations (an id that already exists is not duplicated),
+ * so replaying an event never corrupts the list.
+ */
+export function applyBoardEvent(elements, event) {
+    const payload = event.payload ?? {};
+    switch (event.type) {
+        case "ELEMENT_CREATED":
+        case "CONNECTOR_CREATED":
+            return elements.some((element) => element.id === payload.element.id)
+                ? elements
+                : addElement(elements, payload.element);
+        case "ELEMENT_MOVED":
+            return updateElementPosition(elements, payload.elementId, payload.x, payload.y);
+        case "ELEMENT_UPDATED":
+            return replaceElement(elements, payload.element);
+        case "ELEMENT_DELETED":
+            return removeElement(elements, payload.elementId);
+        default:
+            return elements;
+    }
 }
 
 export function createRectangle(x, y) {
@@ -96,6 +137,9 @@ const initialState = () => ({
     remoteStatus: RemoteStatus.IDLE,
     errorMessage: null,
     lastOperation: null,
+    liveStatus: LiveStatus.DISCONNECTED,
+    liveMessage: null,
+    lastEvent: null,
 });
 
 export class BoardState {
@@ -149,29 +193,45 @@ export class BoardState {
         this.notify();
     }
 
-    addRectangleAt(x, y) {
-        this.mutateElements((elements) => addElement(elements, createRectangle(x, y)));
-    }
-
-    addTextAt(x, y, text) {
-        this.mutateElements((elements) => addElement(elements, createText(x, y, text)));
-    }
-
-    moveElement(elementId, x, y) {
-        this.mutateElements((elements) => updateElementPosition(elements, elementId, x, y));
-    }
-
-    deleteSelectedElement() {
-        if (!this.state.selectedElementId) {
-            return;
-        }
-        const elementId = this.state.selectedElementId;
-        this.mutateElements((elements) => removeElement(elements, elementId));
-        this.state = { ...this.state, selectedElementId: null };
+    setLiveStatus(liveStatus, liveMessage = null) {
+        this.state = { ...this.state, liveStatus, liveMessage };
         this.notify();
     }
 
-    /** Records the first endpoint picked while in CONNECT mode. */
+    findElement(elementId) {
+        return this.state.board?.elements.find((element) => element.id === elementId) ?? null;
+    }
+
+    /**
+     * Applies an accepted (or offline) event to the current board and
+     * notifies listeners. Events for another board are ignored, which keeps
+     * sessions isolated even if a stale message arrives after switching.
+     * Returns true when the event was applied.
+     */
+    applyEvent(event) {
+        const board = this.state.board;
+        if (!board || event.boardId !== board.id) {
+            return false;
+        }
+        const elements = applyBoardEvent(board.elements, event);
+        const exists = (id) => id !== null && elements.some((element) => element.id === id);
+        this.state = {
+            ...this.state,
+            board: { ...board, elements },
+            selectedElementId: exists(this.state.selectedElementId) ? this.state.selectedElementId : null,
+            connectSourceId: exists(this.state.connectSourceId) ? this.state.connectSourceId : null,
+            lastEvent: { type: event.type, actorId: event.actorId },
+            liveMessage: null, // a newer accepted change supersedes the last rejection notice
+        };
+        this.notify();
+        return true;
+    }
+
+    /**
+     * Records the endpoints picked while in CONNECT mode. Returns
+     * {sourceId, targetId} once both are chosen (and leaves CONNECT mode);
+     * the caller turns that into a CONNECTOR_CREATED event.
+     */
     pickConnectorEndpoint(elementId) {
         if (!this.state.connectSourceId) {
             this.state = { ...this.state, connectSourceId: elementId, selectedElementId: elementId };
@@ -182,18 +242,8 @@ export class BoardState {
             return null;
         }
         const sourceId = this.state.connectSourceId;
-        this.mutateElements((elements) => addElement(elements, createConnector(sourceId, elementId)));
         this.state = { ...this.state, connectSourceId: null, mode: InteractionMode.IDLE, selectedElementId: null };
         this.notify();
         return { sourceId, targetId: elementId };
-    }
-
-    mutateElements(update) {
-        if (!this.state.board) {
-            return;
-        }
-        const elements = update(this.state.board.elements);
-        this.state = { ...this.state, board: { ...this.state.board, elements } };
-        this.notify();
     }
 }
